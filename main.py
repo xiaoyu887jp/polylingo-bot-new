@@ -3,89 +3,86 @@ import requests
 
 app = Flask(__name__)
 
-LINE_ACCESS_TOKEN = "B3blv9hwkVhaXvm9FEpijEck8hxdiNIhhlXD9A+OZDGGYhn3mEqs71gF1i88JV/7Uh+ZM9mOBOzQlhZNZhl6vtF9X/1j3gyfiT2NxFGRS8B6I0ZTUR0J673O21pqSdIJVTk3rtvWiNkFov0BTlVpuAdB04t89/1O/w1cDnyilFU="
-GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
-
-# 用戶翻譯語言設定（支援多語）
+LINE_ACCESS_TOKEN = "你的LINE Token"
+GOOGLE_API_KEY = "你的Google API Key"
 user_language_settings = {}
 
-# 支援 VIP 用戶（付費功能） - 手動添加 user_id
-vip_users = set([
-    # "Uxxxxxxxxxxxxxxxxxxxx"  ← 這裡放付費者的 LINE ID
-])
+# Flex 語言選擇卡片JSON (你設計的按鈕圖)
+flex_message_json = {
+  "type": "flex",
+  "altText": "選擇你要的翻譯語言",
+  "contents": {
+    "type": "bubble",
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {"type": "text", "text": "選擇語言 Choose language", "weight": "bold", "size": "md"},
+        {"type": "button", "action": {"type": "message", "label": "English", "text": "/setlang_add en"}},
+        {"type": "button", "action": {"type": "message", "label": "ภาษาไทย", "text": "/setlang_add th"}},
+        {"type": "button", "action": {"type": "message", "label": "日本語", "text": "/setlang_add ja"}},
+        {"type": "button", "action": {"type": "message", "label": "重新選擇 (Reset)", "text": "/resetlang"}}
+      ]
+    }
+  }
+}
+
+def reply_to_line(reply_token, messages):
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
+    }
+    payload = {"replyToken": reply_token, "messages": messages}
+    requests.post(url, headers=headers, json=payload)
 
 def detect_language(text):
     url = f"https://translation.googleapis.com/language/translate/v2/detect?key={GOOGLE_API_KEY}"
-    payload = {"q": text}
-    headers = {"Content-Type": "application/json"}
-    res = requests.post(url, json=payload, headers=headers, timeout=5)
-    res.raise_for_status()
+    res = requests.post(url, json={"q": text})
     return res.json()["data"]["detections"][0][0]["language"]
 
 def translate(text, target_lang):
     url = f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_API_KEY}"
-    payload = {"q": text, "target": target_lang, "format": "text"}
-    headers = {"Content-Type": "application/json"}
-    res = requests.post(url, json=payload, headers=headers, timeout=5)
-    res.raise_for_status()
+    res = requests.post(url, json={"q": text, "target": target_lang})
     return res.json()["data"]["translations"][0]["translatedText"]
-
-def reply_to_line(reply_token, message):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "replyToken": reply_token,
-        "messages": [{"type": "text", "text": message}]
-    }
-    requests.post(url, headers=headers, json=payload)
 
 @app.route("/callback", methods=["POST"])
 def callback():
     data = request.get_json()
     events = data.get("events", [])
-    if not events:
-        return "OK", 200
+    for event in events:
+        reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
 
-    event = events[0]
-    user_id = event["source"]["userId"]
-    message = event.get("message", {})
-    reply_token = event.get("replyToken")
-    user_text = message.get("text", "")
+        # 加好友或加入群組 → 自動跳出Flex語言選單圖片
+        if event["type"] == "follow" or event["type"] == "join":
+            reply_to_line(reply_token, [flex_message_json])
+            continue
 
-    # 新語法：累加語言 /setlang_add zh-cn
-    if user_text.lower().startswith("/setlang_add"):
-        lang_code = user_text[13:].strip()
-        current_langs = user_language_settings.get(user_id, [])
-        if lang_code not in current_langs:
-            current_langs.append(lang_code)
-        user_language_settings[user_id] = current_langs
-        reply = f"✅ 已新增語言：{lang_code.upper()}，目前翻譯語言：{', '.join(current_langs)}"
-        reply_to_line(reply_token, reply)
-        return "OK", 200
+        user_text = event.get("message", {}).get("text", "")
+        if user_text.startswith("/setlang_add"):
+            lang = user_text.split()[1]
+            user_language_settings.setdefault(user_id, set()).add(lang)
+            reply_to_line(reply_token, [{"type": "text", "text": f"✅ 語言已設定為 {lang}"}])
+            continue
 
-    # 舊語法：覆蓋語言 /setlang en,th
-    if user_text.lower().startswith("/setlang"):
-        lang_list = user_text[9:].split(",")
-        user_language_settings[user_id] = [lang.strip() for lang in lang_list if lang.strip()]
-        reply = f"✅ 語言已設定為：{', '.join(user_language_settings[user_id])}"
-        reply_to_line(reply_token, reply)
-        return "OK", 200
+        if user_text == "/resetlang":
+            user_language_settings[user_id] = set()
+            reply_to_line(reply_token, [{"type": "text", "text": "✅ 語言設定已清空，請重新選擇。"}])
+            continue
 
-    # 一般訊息翻譯流程
-    target_langs = user_language_settings.get(user_id, ["en"])
-    translations = []
-    for lang in target_langs:
-        try:
-            translated = translate(user_text, lang)
-            translations.append(f"[{lang.upper()}] {translated}")
-        except Exception:
-            translations.append(f"[{lang.upper()}] 翻譯失敗")
+        target_langs = user_language_settings.get(user_id, [])
+        if not target_langs:
+            reply_to_line(reply_token, [{"type": "text", "text": "你還沒設定語言，請先點按鈕設定語言。"}])
+            continue
 
-    full_reply = "\n\n".join(translations)
-    reply_to_line(reply_token, full_reply)
+        # 語言已選 → 自動翻譯
+        translated_messages = []
+        for lang in target_langs:
+            translation = translate(user_text, lang)
+            translated_messages.append({"type": "text", "text": f"[{lang.upper()}] {translation}"})
+
+        reply_to_line(reply_token, translated_messages)
 
     return "OK", 200
 
