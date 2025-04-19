@@ -1,107 +1,63 @@
-from flask import Flask, request
-import requests
-
-app = Flask(__name__)
-
-# 请在此处填入你的真实 LINE Access Token 与 Google API 密钥
-LINE_ACCESS_TOKEN = "B3blv9hwkVhaXvm9FEpijEck8hxdiNIhhlXD9A+OZDGGYhn3mEqs71gF1i88JV/7Uh+ZM9mOBOzQlhZNZhl6vtF9X/1j3gyfiT2NxFGRS8B6I0ZTUR0J673O21pqSdIJVTk3rtvWiNkFov0BTlVpuAdB04t89/1O/w1cDnyilFU="
-GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
-
-user_language_settings = {}
-
-# Flex 語言選擇卡片JSON (你設計的按鈕圖)
 flex_message_json = {
-    "type": "flex",
-    "altText": "選擇你要的翻譯語言",
-    "contents": {
-        "type": "bubble",
-        "body": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {"type": "text", "text": "選擇語言 Choose language", "weight": "bold", "size": "md"},
-                {"type": "button", "action": {"type": "message", "label": "English", "text": "/setlang_add en"}},
-                {"type": "button", "action": {"type": "message", "label": "ภาษาไทย", "text": "/setlang_add th"}},
-                {"type": "button", "action": {"type": "message", "label": "日本語", "text": "/setlang_add ja"}},
-                {"type": "button", "action": {"type": "message", "label": "重新選擇 (Reset)", "text": "/resetlang"}}
-            ]
-        }
-    }
+  "type": "bubble",
+  "header": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [{"type": "text", "text": "Language", "weight": "bold", "size": "lg", "align": "center"}],
+    "backgroundColor": "#FFCC80"
+  },
+  "body": {
+    "type": "box",
+    "layout": "vertical",
+    "spacing": "sm",
+    "contents": [
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "English(en)", "text": "/setlang_add en"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "繁體中文 (zh-tw)", "text": "/setlang_add zh-tw"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "简体中文 (zh-cn)", "text": "/setlang_add zh-cn"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "日本語 (ja)", "text": "/setlang_add ja"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "印尼文 (id)", "text": "/setlang_add id"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "韓文 (ko)", "text": "/setlang_add ko"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "法文 (fr)", "text": "/setlang_add fr"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "越南 (vi)", "text": "/setlang_add vi"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "泰文 (th)", "text": "/setlang_add th"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "西班牙 (es)", "text": "/setlang_add es"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "俄文 (ru)", "text": "/setlang_add ru"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "印度 (hi)", "text": "/setlang_add hi"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "葡萄牙 (pt)", "text": "/setlang_add pt"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "德文 (de)", "text": "/setlang_add de"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "阿拉伯 (ar)", "text": "/setlang_add ar"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "菲律賓 (fil)", "text": "/setlang_add fil"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "土耳其 (tr)", "text": "/setlang_add tr"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "緬甸 (my)", "text": "/setlang_add my"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "孟加拉 (bn)", "text": "/setlang_add bn"}},
+      {"type": "button","style": "primary","color": "#4CAF50",
+        "action": {"type": "message", "label": "柬埔寨 (km)", "text": "/setlang_add km"}}
+    ]
+  },
+  "footer": {
+    "type": "box",
+    "layout": "vertical",
+    "contents": [
+      {"type": "button", "style": "secondary", "action": {"type": "message", "label": "重選 (reselect)", "text": "/resetlang"}}
+    ]
+  }
 }
-
-def reply_to_line(reply_token, messages):
-    url = "https://api.line.me/v2/bot/message/reply"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
-    }
-    payload = {"replyToken": reply_token, "messages": messages}
-    requests.post(url, headers=headers, json=payload)
-
-def detect_language(text):
-    url = f"https://translation.googleapis.com/language/translate/v2/detect?key={GOOGLE_API_KEY}"
-    res = requests.post(url, json={"q": text})
-    return res.json()["data"]["detections"][0][0]["language"]
-
-def translate(text, target_lang):
-    url = f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_API_KEY}"
-    res = requests.post(url, json={"q": text, "target": target_lang})
-    return res.json()["data"]["translations"][0]["translatedText"]
-
-@app.route("/callback", methods=["POST"])
-def callback():
-    data = request.get_json()
-    events = data.get("events", [])
-    for event in events:
-        reply_token = event["replyToken"]
-        user_id = event["source"].get("userId")
-
-        # 没有user_id的事件不处理，避免报错
-        if not user_id:
-            continue
-
-        # 加好友或加入群組 → 自動跳出Flex語言選單圖片與中英文提示
-        if event["type"] == "follow" or event["type"] == "join":
-            reply_to_line(reply_token, [
-                {"type": "text", "text": "請你按按鈕選擇語言 (Please choose language)"},
-                flex_message_json
-            ])
-            continue
-
-        user_text = event.get("message", {}).get("text", "")
-        
-        # 用户手动选择语言设定
-        if user_text.startswith("/setlang_add"):
-            lang = user_text.split()[1]
-            user_language_settings.setdefault(user_id, set()).add(lang)
-            reply_to_line(reply_token, [{"type": "text", "text": f"✅ 語言已設定為 {lang}"}])
-            continue
-
-        # 用户重置语言设定
-        if user_text == "/resetlang":
-            user_language_settings[user_id] = set()
-            reply_to_line(reply_token, [{"type": "text", "text": "✅ 語言設定已清空，請重新選擇。"}])
-            continue
-
-        target_langs = user_language_settings.get(user_id, [])
-        
-        # 若用户未设定语言则提醒并发送Flex卡片
-        if not target_langs:
-            reply_to_line(reply_token, [
-                {"type": "text", "text": "你還沒設定語言，請先點按鈕設定語言。"},
-                flex_message_json
-            ])
-            continue
-
-        # 用户已设定语言，自动翻译并回复
-        translated_messages = []
-        for lang in target_langs:
-            translation = translate(user_text, lang)
-            translated_messages.append({"type": "text", "text": f"[{lang.upper()}] {translation}"})
-
-        reply_to_line(reply_token, translated_messages)
-
-    return "OK", 200
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
