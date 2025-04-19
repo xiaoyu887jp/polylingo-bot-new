@@ -54,9 +54,12 @@ def callback():
         reply_token = event["replyToken"]
         user_id = event["source"]["userId"]
 
-        # 加好友或加入群組 → 自動跳出Flex語言選單圖片
+        # 加好友或加入群組 → 自動跳出Flex語言選單圖片與中英文提示
         if event["type"] == "follow" or event["type"] == "join":
-            reply_to_line(reply_token, [flex_message_json])
+            reply_to_line(reply_token, [
+                {"type": "text", "text": "請你按按鈕選擇語言 (Please choose language)"},
+                flex_message_json
+            ])
             continue
 
         user_text = event.get("message", {}).get("text", "")
@@ -73,7 +76,10 @@ def callback():
 
         target_langs = user_language_settings.get(user_id, [])
         if not target_langs:
-            reply_to_line(reply_token, [{"type": "text", "text": "你還沒設定語言，請先點按鈕設定語言。"}])
+            reply_to_line(reply_token, [
+                {"type": "text", "text": "你還沒設定語言，請先點按鈕設定語言。"},
+                flex_message_json
+            ])
             continue
 
         # 語言已選 → 自動翻譯
