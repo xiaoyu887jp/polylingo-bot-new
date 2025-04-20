@@ -17,7 +17,8 @@ flex_message_json = {
         "layout": "vertical",
         "contents": [{
             "type": "text",
-            "text": "🌍 Language",
+            "text":  "🌍 Please select your translation language",
+
             "weight": "bold",
             "size": "lg",
             "align": "center"
