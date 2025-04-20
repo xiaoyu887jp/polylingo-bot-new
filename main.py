@@ -4,8 +4,8 @@ import requests
 app = Flask(__name__)
 
 # 替换你自己的密钥
-LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJBpCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiYO3luhkO4EoTQWocIeVQNxf5Z9YDtcuUlWYNPBGQdB04t89/1O/w1cDnyilFU=
-"
+LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJ8pCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiY03luhkO4EoTQWocIeVQNxf5Z9YDtcuuLWYNPBGQdB04t89/1O/w1cDnyilFU="
+
 GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
 
 # 存储用户语言设定（支持多语言）
