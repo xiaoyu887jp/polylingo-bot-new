@@ -3,11 +3,10 @@ import requests
 
 app = Flask(__name__)
 
-# 这里换成你自己的密钥
+# 请替换你自己的密钥
 LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJBpCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiYO3luhkO4EoTQWocIeVQNxf5Z9YDtcuUlWYNPBGQdB04t89/1O/w1cDnyilFU="
 GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
 
-# 存储用户语言设定（支持多语言）
 user_language_settings = {}
 
 # 完整的 Flex Message JSON（所有语言按钮）
@@ -97,6 +96,10 @@ def callback():
     data = request.get_json()
     events = data.get("events", [])
     for event in events:
+        # 新增这行安全检查，避免KeyError
+        if "replyToken" not in event:
+            continue
+
         reply_token = event["replyToken"]
         user_id = event["source"].get("userId")
 
@@ -105,14 +108,12 @@ def callback():
 
         user_text = event.get("message", {}).get("text", "")
 
-        # 用户主动设定语言
         if user_text.startswith("/setlang_add"):
             lang = user_text.split()[1]
             user_language_settings.setdefault(user_id, set()).add(lang)
             reply_to_line(reply_token, [{"type": "text", "text": f"✅ 已新增語言 {lang}"}])
             continue
 
-        # 重置语言设定
         if user_text == "/resetlang":
             user_language_settings[user_id] = set()
             reply_to_line(reply_token, [{"type": "text", "text": "🔄 语言已重置，请重新选择。"}])
