@@ -3,12 +3,14 @@ import requests
 
 app = Flask(__name__)
 
+# 请重新填入你的真实密钥
 LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJBpCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiYO3luhkO4EoTQWocIeVQNxf5Z9YDtcuUlWYNPBGQdB04t89/1O/w1cDnyilFU="
 GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
 
-user_language_settings = {}  # 記錄每個使用者的語言設定（多個語言）
+user_language_settings = {}
+user_greeted = set()  # 用于追踪已发送过卡片的用户
 
-# 完整的Flex Message JSON設定（16種語言完整選單）
+# 完整的Flex Message JSON (16种语言)
 flex_message_json = {
     "type": "bubble",
     "header": {
@@ -16,7 +18,7 @@ flex_message_json = {
         "layout": "vertical",
         "contents": [{
             "type": "text",
-            "text": "🌍 Please select your translation language",
+            "text":  "🌍 Please select your translation language",
             "weight": "bold",
             "size": "lg",
             "align": "center"
@@ -93,31 +95,36 @@ def callback():
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"].get("userId")
+        if not user_id:
+            continue
         text = event.get("message", {}).get("text", "")
 
+        # 每个用户首次发言仅收到一次语言选择卡片
+        if user_id not in user_language_settings:
+            if user_id not in user_greeted:
+                user_greeted.add(user_id)
+                reply_to_line(reply_token, [{"type": "flex", "altText": "Select languages", "contents": flex_message_json}])
+            continue
+
+        # 设定语言指令
         if text.startswith("/setlang_add"):
             lang = text.split()[1]
             user_language_settings.setdefault(user_id, set()).add(lang)
             reply_to_line(reply_token, [{"type": "text", "text": f"✅ Added {lang}"}])
             continue
 
+        # 重置语言
         if text == "/resetlang":
-            user_language_settings.pop(user_id, None)
+            user_language_settings[user_id] = set()
+            user_greeted.discard(user_id)
             reply_to_line(reply_token, [{"type": "text", "text": "🔄 Languages reset."}])
             continue
 
-        if user_id not in user_language_settings:
-            reply_to_line(reply_token, [{"type": "flex", "altText": "Select languages", "contents": flex_message_json}])
-            continue
-
-        langs = user_language_settings[user_id]
-
-        translations = []
-        for lang in langs:
-            translated_text = translate(text, lang)
-            translations.append({"type": "text", "text": f"[{lang.upper()}] {translated_text}"})
-
-        reply_to_line(reply_token, translations)
+        # 正常翻译处理
+        langs = user_language_settings.get(user_id)
+        if langs:
+            translations = [{"type": "text", "text": f"[{l.upper()}] {translate(text, l)}"} for l in langs]
+            reply_to_line(reply_token, translations)
 
     return "OK", 200
 
