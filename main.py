@@ -1,16 +1,21 @@
 from flask import Flask, request
 import requests
+import firebase_admin
+from firebase_admin import credentials, db
 
 app = Flask(__name__)
 
-# 请重新填入你的真实密钥
-LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJBpCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiYO3luhkO4EoTQWocIeVQNxf5Z9YDtcuUlWYNPBGQdB04t89/1O/w1cDnyilFU="
+# LINE & Google API Key (你的密鑰)
+LINE_ACCESS_TOKEN = "B3blv9hwkVhaXvm9FEpijEck8hxdiNIhhlXD9A+OZDGGYhn3mEqs71gF1i88JV/7Uh+ZM9mOBOzQlhZNZhl6vtF9X/1j3gyfiT2NxFGRS8B6I0ZTUR0J673O21pqSdIJVTk3rtvWiNkFov0BTlVpuAdB04t89/1O/w1cDnyilFU="
 GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
 
-user_language_settings = {}
-user_greeted = set()  # 用于追踪已发送过卡片的用户
+# Firebase 初始化 (把你下載的JSON檔案上傳到Render，並修改為你的檔案名稱)
+cred = credentials.Certificate("serviceAccountKey.json") 
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://你的專案.firebaseio.com/'
+})
 
-# 完整的Flex Message JSON (16种语言)
+# Flex Message JSON (完整的語言卡片)
 flex_message_json = {
     "type": "bubble",
     "header": {
@@ -18,7 +23,7 @@ flex_message_json = {
         "layout": "vertical",
         "contents": [{
             "type": "text",
-            "text":  "🌍 Please select your translation language",
+            "text": "🌍 Please select your translation language",
             "weight": "bold",
             "size": "lg",
             "align": "center"
@@ -32,36 +37,11 @@ flex_message_json = {
         "contents": [
             {"type": "button", "style": "primary", "color": "#4CAF50",
              "action": {"type": "message", "label": "🇺🇸 English (en)", "text": "/setlang_add en"}},
-            {"type": "button", "style": "primary", "color": "#33CC66",
-             "action": {"type": "message", "label": "🇨🇳 简体中文 (zh-cn)", "text": "/setlang_add zh-cn"}},
             {"type": "button", "style": "primary", "color": "#3399FF",
-             "action": {"type": "message", "label": "🇹🇼 繁體中文 (zh-tw)", "text": "/setlang_add zh-tw"}},
-            {"type": "button", "style": "primary", "color": "#FF6666",
              "action": {"type": "message", "label": "🇯🇵 日本語 (ja)", "text": "/setlang_add ja"}},
-            {"type": "button", "style": "primary", "color": "#9966CC",
-             "action": {"type": "message", "label": "🇰🇷 한국어 (ko)", "text": "/setlang_add ko"}},
             {"type": "button", "style": "primary", "color": "#FFCC00",
-             "action": {"type": "message", "label": "🇹🇭 ภาษาไทย (th)", "text": "/setlang_add th"}},
-            {"type": "button", "style": "primary", "color": "#FF9933",
-             "action": {"type": "message", "label": "🇻🇳 Tiếng Việt (vi)", "text": "/setlang_add vi"}},
-            {"type": "button", "style": "primary", "color": "#33CCCC",
-             "action": {"type": "message", "label": "🇫🇷 Français (fr)", "text": "/setlang_add fr"}},
-            {"type": "button", "style": "primary", "color": "#33CC66",
-             "action": {"type": "message", "label": "🇪🇸 Español (es)", "text": "/setlang_add es"}},
-            {"type": "button", "style": "primary", "color": "#3399FF",
-             "action": {"type": "message", "label": "🇩🇪 Deutsch (de)", "text": "/setlang_add de"}},
-            {"type": "button", "style": "primary", "color": "#4CAF50",
-             "action": {"type": "message", "label": "🇮🇩 Bahasa Indonesia (id)", "text": "/setlang_add id"}},
-            {"type": "button", "style": "primary", "color": "#FF6666",
-             "action": {"type": "message", "label": "🇮🇳 हिन्दी (hi)", "text": "/setlang_add hi"}},
-            {"type": "button", "style": "primary", "color": "#66CC66",
-             "action": {"type": "message", "label": "🇮🇹 Italiano (it)", "text": "/setlang_add it"}},
-            {"type": "button", "style": "primary", "color": "#FF9933",
-             "action": {"type": "message", "label": "🇵🇹 Português (pt)", "text": "/setlang_add pt"}},
-            {"type": "button", "style": "primary", "color": "#9966CC",
-             "action": {"type": "message", "label": "🇷🇺 Русский (ru)", "text": "/setlang_add ru"}},
-            {"type": "button", "style": "primary", "color": "#CC3300",
-             "action": {"type": "message", "label": "🇸🇦 العربية (ar)", "text": "/setlang_add ar"}}
+             "action": {"type": "message", "label": "🇹🇭 ภาษาไทย (th)", "text": "/setlang_add th"}}
+            # 你可以依需求加上更多語言按鈕
         ]
     },
     "footer": {
@@ -74,6 +54,7 @@ flex_message_json = {
     }
 }
 
+# 回覆訊息函數
 def reply_to_line(reply_token, messages):
     url = "https://api.line.me/v2/bot/message/reply"
     headers = {
@@ -83,6 +64,7 @@ def reply_to_line(reply_token, messages):
     payload = {"replyToken": reply_token, "messages": messages}
     requests.post(url, headers=headers, json=payload)
 
+# 翻譯函數
 def translate(text, target_lang):
     url = f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_API_KEY}"
     payload = {"q": text, "target": target_lang, "format": "text"}
@@ -95,36 +77,39 @@ def callback():
     for event in data.get("events", []):
         reply_token = event["replyToken"]
         user_id = event["source"].get("userId")
-        if not user_id:
-            continue
         text = event.get("message", {}).get("text", "")
 
-        # 每个用户首次发言仅收到一次语言选择卡片
-        if user_id not in user_language_settings:
-            if user_id not in user_greeted:
-                user_greeted.add(user_id)
-                reply_to_line(reply_token, [{"type": "flex", "altText": "Select languages", "contents": flex_message_json}])
-            continue
+        user_ref = db.reference(f"/users/{user_id}")
 
-        # 设定语言指令
+        # 新增語言設定（永久保存）
         if text.startswith("/setlang_add"):
             lang = text.split()[1]
-            user_language_settings.setdefault(user_id, set()).add(lang)
+            langs = user_ref.get() or []
+            if lang not in langs:
+                langs.append(lang)
+                user_ref.set(langs)
             reply_to_line(reply_token, [{"type": "text", "text": f"✅ Added {lang}"}])
             continue
 
-        # 重置语言
+        # 重置語言設定
         if text == "/resetlang":
-            user_language_settings[user_id] = set()
-            user_greeted.discard(user_id)
+            user_ref.delete()
             reply_to_line(reply_token, [{"type": "text", "text": "🔄 Languages reset."}])
             continue
 
-        # 正常翻译处理
-        langs = user_language_settings.get(user_id)
-        if langs:
-            translations = [{"type": "text", "text": f"[{l.upper()}] {translate(text, l)}"} for l in langs]
-            reply_to_line(reply_token, translations)
+        # 首次發言跳出卡片（從Firebase永久判斷）
+        langs = user_ref.get()
+        if not langs:
+            reply_to_line(reply_token, [{"type": "flex", "altText": "Select languages", "contents": flex_message_json}])
+            continue
+
+        # 翻譯並回覆
+        translations = []
+        for lang in langs:
+            translated_text = translate(text, lang)
+            translations.append({"type": "text", "text": f"[{lang.upper()}] {translated_text}"})
+
+        reply_to_line(reply_token, translations)
 
     return "OK", 200
 
