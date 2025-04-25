@@ -3,12 +3,14 @@ import requests
 
 app = Flask(__name__)
 
+# 這裡請填入你正確的密鑰
 LINE_ACCESS_TOKEN = "bBVhlw3/hYaZ2y6QDfa0ZOgwlvAfKhz+8RU0d0LFd1H6NdtSyhekPZw3vqOnSVrBUqQmVVcJBpCB8RXkmLSnJNbd7QkZ1Gqdgnu6v5fj3x7qTiYO3luhkO4EoTQWocIeVQNxf5Z9YDtcuUlWYNPBGQdB04t89/1O/w1cDnyilFU="
 GOOGLE_API_KEY = "AIzaSyBOMVXr3XCeqrD6WZLRLL-51chqDA9I80o"
 
-# 全群共用一個設定
-language_settings = set()
+user_language_settings = {}
+user_greeted = set()
 
+# 完整的Flex Message JSON (16種語言)
 flex_message_json = {
     "type": "bubble",
     "header": {
@@ -61,39 +63,60 @@ flex_message_json = {
             {"type": "button", "style": "primary", "color": "#CC3300",
              "action": {"type": "message", "label": "🇸🇦 العربية (ar)", "text": "/setlang_add ar"}}
         ]
+    },
+    "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+            {"type": "button", "style": "secondary",
+             "action": {"type": "message", "label": "🔄 Reset", "text": "/resetlang"}}
+        ]
     }
 }
 
 def reply_to_line(reply_token, messages):
-    headers = {"Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
-    requests.post("https://api.line.me/v2/bot/message/reply", headers=headers, json={"replyToken": reply_token, "messages": messages})
+    url = "https://api.line.me/v2/bot/message/reply"
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"}
+    payload = {"replyToken": reply_token, "messages": messages}
+    requests.post(url, headers=headers, json=payload)
 
 def translate(text, target_lang):
     url = f"https://translation.googleapis.com/language/translate/v2?key={GOOGLE_API_KEY}"
-    payload = {"q": text, "target": target_lang}
+    payload = {"q": text, "target": target_lang, "format": "text"}
     res = requests.post(url, json=payload)
     return res.json()["data"]["translations"][0]["translatedText"]
 
 @app.route("/callback", methods=["POST"])
 def callback():
     data = request.get_json()
-    for event in data["events"]:
+    for event in data.get("events", []):
         reply_token = event["replyToken"]
-        text = event["message"]["text"]
+        user_id = event["source"].get("userId")
+        text = event.get("message", {}).get("text", "")
 
         if text.startswith("/setlang_add"):
             lang = text.split()[1]
-            language_settings.add(lang)
+            user_language_settings.setdefault(user_id, set()).add(lang)
             reply_to_line(reply_token, [{"type": "text", "text": f"✅ Added {lang}"}])
             continue
 
-        if not language_settings:
-            reply_to_line(reply_token, [{"type": "flex", "altText": "Select language", "contents": flex_message_json}])
-        else:
-            translations = [{"type": "text", "text": f"[{lang.upper()}] {translate(text, lang)}"} for lang in language_settings]
-            reply_to_line(reply_token, translations)
+        if text == "/resetlang":
+            user_language_settings[user_id] = set()
+            user_greeted.discard(user_id)
+            reply_to_line(reply_token, [{"type": "text", "text": "🔄 Languages reset."}])
+            continue
 
-    return "OK"
+        langs = user_language_settings.get(user_id)
+        if not langs:
+            if user_id not in user_greeted:
+                user_greeted.add(user_id)
+                reply_to_line(reply_token, [{"type": "flex", "altText": "Select languages", "contents": flex_message_json}])
+            continue
+
+        translations = [{"type": "text", "text": f"[{l.upper()}] {translate(text, l)}"} for l in langs]
+        reply_to_line(reply_token, translations)
+
+    return "OK", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
